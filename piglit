@@ -64,7 +64,7 @@ if not path.exists('framework/exectest.py'):
         # In the install case we have another problem, one could have multiple
         # piglits installed as piglit${the_date_of_install}, and we need to
         # detect that.
-        install_path = path.abspath(path.join(dirpath, '..', 'lib', piglit))
+        install_path = path.abspath(path.join(dirpath, '..', '@LIBDIR@', piglit))
         sys.path.append(install_path)
 
 import framework.programs.run as run
