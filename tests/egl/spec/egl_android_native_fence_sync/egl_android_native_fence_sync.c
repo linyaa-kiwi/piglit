@@ -34,6 +34,7 @@
 
 #include "piglit-util-egl.h"
 #include "piglit-util-gl.h"
+#include "sw_sync.h"
 
 /* Extension function pointers.
  *
@@ -333,10 +334,141 @@ cleanup:
 	return result;
 }
 
+static EGLSyncKHR
+test_create_fence_from_fd(int fd)
+{
+	EGLint attrib_list[] = {
+		EGL_SYNC_NATIVE_FENCE_FD_ANDROID, fd,
+		EGL_NONE,
+	};
+
+	return peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, attrib_list);
+}
+
 static enum piglit_result
 test_eglCreateSyncKHR_native_from_fd(void *test_data)
 {
-	return PIGLIT_PASS;
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+	EGLint sync_type = canary,
+	       sync_status = canary,
+	       sync_condition = canary;
+	int sync_fd = canary;
+	int timeline = canary;
+	bool ok = false;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	if (!sw_sync_is_supported()) {
+		result = PIGLIT_SKIP;
+		goto cleanup;
+	}
+
+	/* Create timeline and sw_sync */
+	timeline = sw_sync_timeline_create();
+	if (timeline < 0) {
+		piglit_loge("sw_sync_timeline_create() failed");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+	sync_fd = sw_sync_fence_create(timeline, 1);
+	if (sync_fd < 0) {
+		piglit_loge("sw_sync_fence_create() failed");
+		result = PIGLIT_FAIL;
+		goto cleanup_timeline;
+	}
+
+	sync = test_create_fence_from_fd(sync_fd);
+	if (sync == EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR(EGL_SYNC_NATIVE_FENCE_ANDROID) failed");
+		result = PIGLIT_FAIL;
+		sw_sync_fence_destroy(sync_fd);
+		goto cleanup_timeline;
+	}
+
+	ok = peglGetSyncAttribKHR(g_dpy, sync, EGL_SYNC_TYPE_KHR, &sync_type);
+	if (!ok) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_TYPE_KHR) failed");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_SUCCESS)) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_TYPE_KHR) emitted "
+			    "an error");
+		result = PIGLIT_FAIL;
+	}
+	if (sync_type != EGL_SYNC_NATIVE_FENCE_ANDROID) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_TYPE_KHR) returned "
+			    "0x%x but expected EGL_SYNC_NATIVE_FENCE_ANDROID(0x%x)",
+			    sync_type, EGL_SYNC_NATIVE_FENCE_ANDROID);
+		result = PIGLIT_FAIL;
+	}
+
+	ok = peglGetSyncAttribKHR(g_dpy, sync, EGL_SYNC_STATUS_KHR, &sync_status);
+	if (!ok) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) failed");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_SUCCESS)) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) emitted "
+			    "an error");
+		result = PIGLIT_FAIL;
+	}
+	if (sync_status != EGL_UNSIGNALED_KHR) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) "
+			    "returned 0x%x but expected "
+			    "EGL_UNSIGNALED_KHR(0x%x)",
+			    sync_status, EGL_UNSIGNALED_KHR);
+		result = PIGLIT_FAIL;
+	}
+
+	ok = peglGetSyncAttribKHR(g_dpy, sync, EGL_SYNC_CONDITION_KHR, &sync_condition);
+	if (!ok) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_CONDITION_KHR) failed");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_SUCCESS)) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_CONDITION_KHR) "
+			    "emitted an error");
+		result = PIGLIT_FAIL;
+	}
+	if (sync_condition != EGL_SYNC_NATIVE_FENCE_SIGNALED_ANDROID) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_CONDITION_KHR) "
+			    "returned 0x%x but expected "
+			    "EGL_SYNC_NATIVE_FENCE_SIGNALED_ANDROID(0x%x)",
+			    sync_condition, EGL_SYNC_NATIVE_FENCE_SIGNALED_ANDROID);
+		result = PIGLIT_FAIL;
+	}
+
+	sw_sync_timeline_inc(timeline, 1);
+
+	ok = peglGetSyncAttribKHR(g_dpy, sync, EGL_SYNC_STATUS_KHR, &sync_status);
+	if (!ok) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) failed");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_SUCCESS)) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) emitted "
+			    "an error");
+		result = PIGLIT_FAIL;
+	}
+	if (sync_status != EGL_SIGNALED_KHR) {
+		piglit_loge("eglGetSyncAttribKHR(EGL_SYNC_STATUS_KHR) "
+			    "returned 0x%x but expected "
+			    "EGL_SIGNALED_KHR(0x%x)",
+			    sync_status, EGL_SIGNALED_KHR);
+		result = PIGLIT_FAIL;
+	}
+
+cleanup_timeline:
+	sw_sync_timeline_destroy(timeline);
+
+cleanup:
+	test_cleanup(sync, &result);
+	return result;
 }
 
 static const struct piglit_subtest fence_sync_subtests[] = {
