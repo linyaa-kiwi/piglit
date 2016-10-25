@@ -515,7 +515,7 @@ cleanup:
  * Verify that eglCreateSyncKHR emits correct error when given an invalid
  * display.
  *
- * From the EGL_KHR_fence_sync spec:
+ * From the EGL_ANDROID_native_fence_sync spec:
  *
  *     If <dpy> is not the name of a valid, initialized EGLDisplay,
  *     EGL_NO_SYNC_KHR is returned and an EGL_BAD_DISPLAY error is
@@ -546,6 +546,97 @@ test_eglCreateSyncKHR_native_invalid_display(void *test_data)
 	return result;
 }
 
+static enum piglit_result
+init_other_display(EGLDisplay *out_other_dpy, EGLDisplay orig_dpy)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLDisplay other_dpy = 0;
+	int i;
+
+	static const EGLint platforms[] = {
+		EGL_PLATFORM_X11_EXT,
+		EGL_PLATFORM_WAYLAND_EXT,
+		EGL_PLATFORM_GBM_MESA,
+		0,
+	};
+
+	for (i = 0; platforms[i] != 0; ++i) {
+		result = init_display(platforms[i], &other_dpy);
+		switch (result) {
+			case PIGLIT_SKIP:
+				break;
+			case PIGLIT_PASS:
+				if (other_dpy && other_dpy != orig_dpy) {
+					*out_other_dpy = other_dpy;
+					return PIGLIT_PASS;
+				} else {
+					result = PIGLIT_SKIP;
+					break;
+				}
+			default:
+				break;
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Verify that eglCreateSyncKHR() emits correct error when given a display that
+ * does not match the display of the bound context.
+ *
+ * From the EGL_KHR_fence_sync spec:
+ *
+ *	* If <type> is EGL_SYNC_FENCE_KHR or EGL_SYNC_NATIVE_FENCE_ANDROID and
+ *	  no context is current for the bound API (i.e., eglGetCurrentContext
+ *	  returns EGL_NO_CONTEXT), EGL_NO_SYNC_KHR is returned and an
+ *	  EGL_BAD_MATCH error is generated.
+ *
+ * This test verifies a simple case for the above error. It binds a context and
+ * display to the main thread, creates a second display on the same threads but
+ * does not bind it, then gives the second display to eglCreateSyncKHR().
+ */
+static enum piglit_result
+test_eglCreateSyncKHR_native_wrong_display_same_thread(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLDisplay wrong_dpy = 0;
+	EGLSyncKHR sync = 0;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	piglit_logi("create second EGLDisplay");
+	result = init_other_display(&wrong_dpy, g_dpy);
+	if (result != PIGLIT_PASS) {
+		goto cleanup;
+	}
+
+	piglit_require_egl_extension(wrong_dpy, "EGL_KHR_fence_sync");
+
+	piglit_logi("try to create sync with second display");
+	sync = peglCreateSyncKHR(wrong_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync != EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR() incorrectly succeeded");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+	if (!piglit_check_egl_error(EGL_BAD_MATCH)) {
+		piglit_loge("eglCreateSyncKHR emitted wrong error");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+cleanup:
+	if (wrong_dpy) {
+		eglTerminate(wrong_dpy);
+	}
+	test_cleanup(EGL_NO_SYNC_KHR, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -566,6 +657,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_invalid_display",
 		"eglCreateSyncKHR_invalid_display",
 		test_eglCreateSyncKHR_native_invalid_display,
+	},
+	{
+		"eglCreateSyncKHR_wrong_display_same_thread",
+		"eglCreateSyncKHR_wrong_display_same_thread",
+		test_eglCreateSyncKHR_native_wrong_display_same_thread,
 	},
 	{0},
 };
