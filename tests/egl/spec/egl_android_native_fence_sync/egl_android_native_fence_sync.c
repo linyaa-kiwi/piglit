@@ -546,6 +546,47 @@ test_eglCreateSyncKHR_native_invalid_display(void *test_data)
 	return result;
 }
 
+/**
+ * Verify that eglCreateSyncKHR emits correct error when given an invalid
+ * attribute list.
+ *
+ * From the EGL_ANDROID_native_fence_sync spec:
+ *
+ *	If <type> is EGL_SYNC_NATIVE_FENCE_ANDROID and <attrib_list> contains
+ *	an attribute other than EGL_SYNC_NATIVE_FENCE_FD_ANDROID,
+ *	EGL_NO_SYNC_KHR is returned and an EGL_BAD_ATTRIBUTE error is
+ *	generated.
+ */
+static enum piglit_result
+test_eglCreateSyncKHR_native_invalid_attrib_list(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+	const EGLint attrib_list[] = {
+		EGL_CONTEXT_CLIENT_VERSION, 2,
+		EGL_NONE,
+	};
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	sync = peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, attrib_list);
+	if (sync != EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR() succeeded with invalid "
+			    "attrib list");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_BAD_ATTRIBUTE)) {
+		piglit_loge("eglCreateSyncKHR emitted wrong error");
+		result = PIGLIT_FAIL;
+	}
+
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static enum piglit_result
 init_other_display(EGLDisplay *out_other_dpy, EGLDisplay orig_dpy)
 {
@@ -587,10 +628,10 @@ init_other_display(EGLDisplay *out_other_dpy, EGLDisplay orig_dpy)
  *
  * From the EGL_KHR_fence_sync spec:
  *
- *	* If <type> is EGL_SYNC_FENCE_KHR or EGL_SYNC_NATIVE_FENCE_ANDROID and
- *	  no context is current for the bound API (i.e., eglGetCurrentContext
- *	  returns EGL_NO_CONTEXT), EGL_NO_SYNC_KHR is returned and an
- *	  EGL_BAD_MATCH error is generated.
+ *	If <type> is EGL_SYNC_FENCE_KHR or EGL_SYNC_NATIVE_FENCE_ANDROID and no
+ *	context is current for the bound API (i.e., eglGetCurrentContext
+ *	returns EGL_NO_CONTEXT), EGL_NO_SYNC_KHR is returned and an
+ *	EGL_BAD_MATCH error is generated.
  *
  * This test verifies a simple case for the above error. It binds a context and
  * display to the main thread, creates a second display on the same threads but
@@ -657,6 +698,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_invalid_display",
 		"eglCreateSyncKHR_invalid_display",
 		test_eglCreateSyncKHR_native_invalid_display,
+	},
+	{
+		"eglCreateSyncKHR_native_invalid_attrib_list",
+		"eglCreateSyncKHR_native_invalid_attrib_list",
+		test_eglCreateSyncKHR_native_invalid_attrib_list,
 	},
 	{
 		"eglCreateSyncKHR_wrong_display_same_thread",
