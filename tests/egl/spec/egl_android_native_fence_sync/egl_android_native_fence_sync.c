@@ -511,6 +511,41 @@ cleanup:
 	return result;
 }
 
+/**
+ * Verify that eglCreateSyncKHR emits correct error when given an invalid
+ * display.
+ *
+ * From the EGL_KHR_fence_sync spec:
+ *
+ *     If <dpy> is not the name of a valid, initialized EGLDisplay,
+ *     EGL_NO_SYNC_KHR is returned and an EGL_BAD_DISPLAY error is
+ *     generated.
+ */
+static enum piglit_result
+test_eglCreateSyncKHR_native_invalid_display(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	sync = peglCreateSyncKHR(EGL_NO_DISPLAY, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync != EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR(EGL_NO_DISPLAY) succeeded");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_BAD_DISPLAY)) {
+		piglit_loge("eglCreateSyncKHR emitted wrong error");
+		result = PIGLIT_FAIL;
+	}
+
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -526,6 +561,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_native_dup_fence",
 		"eglCreateSyncKHR_native_dup_fence",
 		test_eglCreateSyncKHR_native_dup_fence,
+	},
+	{
+		"eglCreateSyncKHR_invalid_display",
+		"eglCreateSyncKHR_invalid_display",
+		test_eglCreateSyncKHR_native_invalid_display,
 	},
 	{0},
 };
