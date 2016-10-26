@@ -678,6 +678,44 @@ cleanup:
 	return result;
 }
 
+/**
+ * Verify that eglCreateSyncKHR emits correct error when no context is current.
+ *
+ * From the EGL_ANDROID_native_fence_sync spec:
+ *
+ *      If <type> is EGL_SYNC_FENCE_KHR or EGL_SYNC_NATIVE_FENCE_ANDROID and no
+ *      context is current for the bound API (i.e., eglGetCurrentContext
+ *      returns EGL_NO_CONTEXT), EGL_NO_SYNC_KHR is returned and an
+ *      EGL_BAD_MATCH error is generated.
+ */
+static enum piglit_result
+test_eglCreateSyncKHR_native_no_current_context(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+	eglMakeCurrent(g_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+	sync = peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync != EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR() succeeded when no context was "
+			    "current");
+		peglDestroySyncKHR(g_dpy, sync);
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_BAD_MATCH)) {
+		piglit_loge("eglCreateSyncKHR emitted wrong error");
+		result = PIGLIT_FAIL;
+	}
+
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -708,6 +746,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_wrong_display_same_thread",
 		"eglCreateSyncKHR_wrong_display_same_thread",
 		test_eglCreateSyncKHR_native_wrong_display_same_thread,
+	},
+	{
+		"eglCreateSyncKHR_native_no_current_context",
+		"eglCreateSyncKHR_native_no_current_context",
+		test_eglCreateSyncKHR_native_no_current_context,
 	},
 	{0},
 };
