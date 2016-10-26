@@ -716,6 +716,76 @@ test_eglCreateSyncKHR_native_no_current_context(void *test_data)
 	return result;
 }
 
+/**
+ * Verify that eglGetSyncAttribKHR emits the correct error when querying an
+ * unrecognized attribute of a fence sync.
+ *
+ * From the EGL_KHR_fence_sync:
+ *
+ *    [eglGetSyncAttribKHR] is used to query attributes of the sync object
+ *    <sync>. Legal values for <attribute> depend on the type of sync object,
+ *    as shown in table
+ *    3.cc. [...]
+ *
+ *    Attribute              Description                Supported Sync Objects
+ *    -----------------      -----------------------    ----------------------
+ *    EGL_SYNC_TYPE_KHR      Type of the sync object    All
+ *    EGL_SYNC_STATUS_KHR    Status of the sync object  All
+ *    EGL_SYNC_CONDITION_KHR Signaling condition        EGL_SYNC_FENCE_KHR only
+ *
+ *    Table 3.cc  Attributes Accepted by eglGetSyncAttribKHR Command
+ *
+ *    [...]
+ *
+ *    * If <attribute> is not one of the attributes in table 3.cc,
+ *      EGL_FALSE is returned and an EGL_BAD_ATTRIBUTE error is
+ *      generated.
+ *
+ *    [...]
+ *
+ *    If any error occurs, <*value> is not modified.
+ */
+static enum piglit_result
+test_eglGetSyncAttribKHR_native_invalid_attrib(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	bool ok = false;
+	EGLSyncKHR sync = 0;
+	EGLint attrib_value = canary;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	sync = peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync == EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR(EGL_SYNC_FENCE_KHR) failed");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+	ok = peglGetSyncAttribKHR(g_dpy, sync, EGL_BUFFER_PRESERVED,
+				  &attrib_value);
+	if (ok) {
+		piglit_loge("eglGetSyncAttribKHR(attrib=EGL_BUFFER_PRESERVED) "
+			    "incorrectly succeeded");
+		result = PIGLIT_FAIL;
+	}
+	if (!piglit_check_egl_error(EGL_BAD_ATTRIBUTE)) {
+		piglit_loge("eglGetSyncAttribKHR emitted wrong error");
+		result = PIGLIT_FAIL;
+	}
+	if (attrib_value != canary) {
+		piglit_loge("eglGetSynAttribKHR modified out parameter <value>");
+		result = PIGLIT_FAIL;
+	}
+
+cleanup:
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -751,6 +821,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_native_no_current_context",
 		"eglCreateSyncKHR_native_no_current_context",
 		test_eglCreateSyncKHR_native_no_current_context,
+	},
+	{
+		"eglGetSyncAttribKHR_native_invalid_attrib",
+		"eglGetSyncAttribKHR_native_invalid_attrib",
+		test_eglGetSyncAttribKHR_native_invalid_attrib,
 	},
 	{0},
 };
