@@ -876,6 +876,55 @@ cleanup:
 	return result;
 }
 
+/**
+ * Verify that eglClientWaitSyncKHR() accepts nonzero timeout values, including
+ * EGL_FOREVER_KHR.
+ */
+static enum piglit_result
+test_eglClientWaitSyncKHR_native_nonzero_timeout(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+	EGLint wait_status = 0;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	sync = peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync == EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR(EGL_SYNC_FENCE_KHR) failed");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+	/* There exist no pending GL commands, so the sync status should be
+	 * EGL_CONDITION_SATISFIED_KHR.
+	 */
+	wait_status = peglClientWaitSyncKHR(g_dpy, sync, 0, 0.5e9);
+	if (wait_status != EGL_CONDITION_SATISFIED_KHR) {
+		piglit_loge("eglClientWaitSyncKHR(timeout=0.5sec)\n"
+			    "  Expected status EGL_CONDITION_SATISFIED_KHR(0x%x)\n"
+			    "  Actual status 0x%x\n",
+			    EGL_CONDITION_SATISFIED_KHR, wait_status);
+		result = PIGLIT_FAIL;
+	}
+
+	wait_status = peglClientWaitSyncKHR(g_dpy, sync, 0, EGL_FOREVER_KHR);
+	if (wait_status != EGL_CONDITION_SATISFIED_KHR) {
+		piglit_loge("eglClientWaitSyncKHR(timeout=forever)\n"
+			    "  Expected status EGL_CONDITION_SATISFIED_KHR(0x%x)\n"
+			    "  Actual status 0x%x\n",
+			    EGL_CONDITION_SATISFIED_KHR, wait_status);
+		result = PIGLIT_FAIL;
+	}
+
+cleanup:
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -921,6 +970,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglClientWaitSyncKHR_native_zero_timeout",
 		"eglClientWaitSyncKHR_native_zero_timeout",
 		test_eglClientWaitSyncKHR_native_zero_timeout,
+	},
+	{
+		"eglClientWaitSyncKHR_native_nonzero_timeout",
+		"eglClientWaitSyncKHR_native_nonzero_timeout",
+		test_eglClientWaitSyncKHR_native_nonzero_timeout,
 	},
 	{0},
 };
