@@ -471,6 +471,46 @@ cleanup:
 	return result;
 }
 
+static enum piglit_result
+test_eglCreateSyncKHR_native_dup_fence(void *test_data)
+{
+	enum piglit_result result = PIGLIT_PASS;
+	EGLSyncKHR sync = 0;
+	int sync_fd = canary;
+
+	result = test_setup();
+	if (result != PIGLIT_PASS) {
+		return result;
+	}
+
+	sync = peglCreateSyncKHR(g_dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, NULL);
+	if (sync == EGL_NO_SYNC_KHR) {
+		piglit_loge("eglCreateSyncKHR(EGL_SYNC_NATIVE_FENCE_ANDROID) failed");
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+	glFlush();
+
+	if (result == PIGLIT_FAIL)
+		goto cleanup;
+
+	/* Verify that we can get an fd back from eglDupFenceFD(). */
+	sync_fd = peglDupNativeFenceFDANDROID(g_dpy, sync);
+	if (sync_fd == -1) {
+		piglit_loge("eglDupNativeFenceFDANDROID() failed"
+			    "returned %d but expected >= 0", sync_fd);
+		result = PIGLIT_FAIL;
+		goto cleanup;
+	}
+
+	close(sync_fd);
+
+cleanup:
+	test_cleanup(sync, &result);
+	return result;
+}
+
 static const struct piglit_subtest fence_sync_subtests[] = {
 	{
 		"eglCreateSyncKHR_native_no_fence",
@@ -481,6 +521,11 @@ static const struct piglit_subtest fence_sync_subtests[] = {
 		"eglCreateSyncKHR_native_from_fd",
 		"eglCreateSyncKHR_native_from_fd",
 		test_eglCreateSyncKHR_native_from_fd,
+	},
+	{
+		"eglCreateSyncKHR_native_dup_fence",
+		"eglCreateSyncKHR_native_dup_fence",
+		test_eglCreateSyncKHR_native_dup_fence,
 	},
 	{0},
 };
