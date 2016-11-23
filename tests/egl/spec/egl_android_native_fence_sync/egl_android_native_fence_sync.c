@@ -642,6 +642,7 @@ init_other_display(EGLDisplay *out_other_dpy, EGLDisplay orig_dpy)
 		EGL_PLATFORM_X11_EXT,
 		EGL_PLATFORM_WAYLAND_EXT,
 		EGL_PLATFORM_GBM_MESA,
+		EGL_PLATFORM_SURFACELESS_MESA,
 		0,
 	};
 
